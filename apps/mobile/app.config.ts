@@ -110,9 +110,20 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
+// Forks building with their own Apple team need their own App ID: the
+// com.t3tools.* identifiers are registered to T3 Tools. Variant suffixes are
+// preserved so the three variants still install side by side.
+const forkBundleIdentifier = repoEnv.T3CODE_IOS_BUNDLE_ID?.trim();
+if (forkBundleIdentifier && !IOS_BUNDLE_IDENTIFIER_PATTERN.test(forkBundleIdentifier)) {
+  throw new Error(
+    "T3CODE_IOS_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code.",
+  );
+}
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
-  : variant.iosBundleIdentifier;
+  : forkBundleIdentifier
+    ? `${forkBundleIdentifier}${variant.iosBundleIdentifier.slice("com.t3tools.t3code".length)}`
+    : variant.iosBundleIdentifier;
 
 const dmSansFonts = {
   regular: "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
@@ -240,7 +251,7 @@ const config: ExpoConfig = {
     // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
     // does not fall back to a personal team (which cannot sign app groups,
     // Sign in with Apple, or push notification entitlements).
-    appleTeamId: "ARK85ZXQ4Z",
+    appleTeamId: repoEnv.T3CODE_IOS_TEAM_ID?.trim() || "ARK85ZXQ4Z",
     associatedDomains: [
       `applinks:${variant.relyingParty}`,
       `webcredentials:${variant.relyingParty}`,
@@ -413,6 +424,12 @@ const config: ExpoConfig = {
       },
     ],
     "./plugins/withIosCocoaPodsUuidCache.cjs",
+    // Apple Watch companion app (targets/watch). Personal Teams cannot sign
+    // the embedded watch app alongside the other capabilities, so it is
+    // omitted from reduced-capability local builds.
+    ...(isIosPersonalTeamBuild
+      ? []
+      : ["./plugins/withWatchCompanionInfoPlist.cjs", "@bacons/apple-targets"]),
     // Must be listed BEFORE expo-widgets: same-type mods run last-registered-
     // first, so registering earlier makes this plugin's mods run AFTER
     // expo-widgets' — its dangerous mod wipes ios/ExpoWidgetsTarget/ (which
