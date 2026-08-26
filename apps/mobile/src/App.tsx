@@ -13,6 +13,7 @@ import { ConfirmDialogHost } from "./components/ConfirmDialogHost";
 import { CloudAuthProvider } from "./features/cloud/CloudAuthProvider";
 import { prepareNativeShowcaseCapture } from "./features/showcase/nativeShowcaseScene";
 import { IncomingShareProvider } from "./features/sharing/IncomingShareProvider";
+import { WatchBridgeHost } from "./features/watch/WatchBridgeHost";
 import {
   AppearancePreferencesProvider,
   useAppearancePreferences,
@@ -98,6 +99,9 @@ function AppContent() {
               </IncomingShareProvider>
               <ConfirmDialogHost />
             </BlurTargetView>
+            {/* Apple Watch companion: mirrors agent status to the wrist and runs
+                the approvals, answers and replies it sends back. */}
+            <WatchBridgeHost />
             {/* Anchored-menu overlays render here — in-window, so the
                 keyboard stays up while a dropdown is open. */}
             <OverlayPortalHost />

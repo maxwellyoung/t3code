@@ -87,6 +87,21 @@ node ../../scripts/mobile-native-static-check.ts
 
 The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin. Missing native tools are reported as warnings and skipped locally. CI installs the default toolset from `apps/mobile/Brewfile` before running the native checks.
 
+## Apple Watch
+
+The watch app is a native SwiftUI target in `targets/watch`, linked into the Xcode project by
+`@bacons/apple-targets` at prebuild time. It talks to the phone over Watch Connectivity through
+`modules/t3-watch-bridge`; the JS side (`src/features/watch`) publishes the agent-awareness list
+and executes the commands the watch sends back. Personal Team builds omit the watch target.
+
+Build it with the usual `vp run ios:dev` / `vp run ios:release`; Xcode embeds the watch app in the
+iOS app. To run on a physical watch, select the `T3CodeWatch` scheme in Xcode with the paired
+iPhone as the run destination. Set `T3CODE_IOS_TEAM_ID` in the repository-root `.env.local` to
+sign with a team other than T3 Tools'.
+
+`targets/watch/Info.plist` is generated per app variant (it carries the companion bundle
+identifier) and is gitignored.
+
 ## EAS Builds
 
 CI uses Expo fingerprinting with the `preview:dev` profile to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and default local builds continue to use the `appVersion` runtime policy.
