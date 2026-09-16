@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
   @EnvironmentObject private var store: WatchStore
+  @State private var showingNewTask = false
 
   private var needsYou: [WatchThread] { store.threads.filter { $0.resolvedPhase.needsUser } }
   private var working: [WatchThread] { store.threads.filter { $0.resolvedPhase.isActive } }
@@ -27,7 +28,19 @@ struct ContentView: View {
       .navigationDestination(for: String.self) { threadId in
         ThreadDetailView(threadId: threadId)
       }
+      .navigationDestination(isPresented: $showingNewTask) {
+        NewTaskView()
+      }
       .toolbar {
+        ToolbarItem(placement: .topBarLeading) {
+          Button {
+            showingNewTask = true
+          } label: {
+            Image(systemName: "plus")
+          }
+          .accessibilityLabel("New task")
+          .disabled(store.projects.isEmpty)
+        }
         ToolbarItem(placement: .topBarTrailing) {
           Button {
             store.requestSnapshot()

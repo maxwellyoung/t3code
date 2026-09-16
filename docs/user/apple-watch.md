@@ -10,7 +10,11 @@ Tasks are grouped by what they need from you:
 - **Working** — agents that are running.
 - **Done** — finished or failed tasks.
 
-Tap a task to see its project, model and current status.
+Tap a task to see its project, model and current status. While the watch app is open, it taps your wrist when a task starts needing you, finishes or fails.
+
+## Start a task
+
+Tap **+** on the task list, choose a project and say what you want done. The task runs in the project's current checkout, using the project's default model or the model and settings of its most recent task, and appears under **Working** once your iPhone delivers it. A project is offered once it has at least one task.
 
 ## Keeping things moving
 
@@ -19,7 +23,7 @@ From a task:
 - **Approvals** — allow or deny a command, file read or file change with one tap. Providers that offer more choices (allow for the session, always allow) show those too.
 - **Questions** — when an agent asks you something, each option is a button. A single-choice question sends as soon as you tap. Multiple-choice questions and multi-part questions collect your answers and send when you tap **Send answers**.
 - **Quick replies** — one-tap messages such as **Full steam ahead**, **Yes**, **No**, **Looks good, continue** and **Ship it**.
-- **Dictate** — tap the text field to dictate, scribble or type a longer reply.
+- **Reply by voice** — speak, scribble or type a longer reply.
 - **Stop** — interrupt a running task.
 
 The watch confirms each action with a tick, or shows the error if the server rejected it.

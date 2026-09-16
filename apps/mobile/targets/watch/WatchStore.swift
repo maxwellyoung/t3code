@@ -17,11 +17,14 @@ final class WatchStore: NSObject, ObservableObject, WCSessionDelegate {
   @Published private(set) var isReachable = false
   @Published private(set) var feedbackByThreadId: [String: WatchFeedback] = [:]
   @Published private(set) var inFlightThreadIds: Set<String> = []
+  @Published private(set) var isStartingTask = false
+  @Published private(set) var newTaskFeedback: WatchFeedback?
 
   private static let snapshotDefaultsKey = "t3code.watch.snapshot"
   private static let commandTimeout: TimeInterval = 25
 
   private var threadIdByCommandId: [String: String] = [:]
+  private var newTaskCommandId: String?
   private let decoder = JSONDecoder()
 
   override init() {
@@ -34,6 +37,7 @@ final class WatchStore: NSObject, ObservableObject, WCSessionDelegate {
 
   var threads: [WatchThread] { snapshot?.threads ?? [] }
   var quickReplies: [String] { snapshot?.quickReplies ?? [] }
+  var projects: [WatchProject] { snapshot?.projects ?? [] }
 
   func thread(id: String) -> WatchThread? {
     threads.first { $0.id == id }
@@ -71,6 +75,38 @@ final class WatchStore: NSObject, ObservableObject, WCSessionDelegate {
 
   func interrupt(_ thread: WatchThread) {
     send(["type": "interruptTurn"], thread: thread)
+  }
+
+  /// Asks the phone to queue a new task in `project`. The phone answers once the
+  /// task is in its outbox; the thread itself appears in a later snapshot.
+  func startTask(_ text: String, in project: WatchProject) {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+    let commandId = UUID().uuidString
+    newTaskCommandId = commandId
+    isStartingTask = true
+    newTaskFeedback = nil
+    WKInterfaceDevice.current().play(.click)
+
+    let command: [String: Any] = [
+      "type": "startThread",
+      "commandId": commandId,
+      "environmentId": project.environmentId,
+      "projectId": project.projectId,
+      "text": trimmed,
+    ]
+    deliver(["command": encode(command)], queueIfUnreachable: true)
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.commandTimeout) { [weak self] in
+      guard let self, self.newTaskCommandId == commandId else { return }
+      self.newTaskCommandId = nil
+      self.isStartingTask = false
+      self.newTaskFeedback = WatchFeedback(ok: true, text: "Sent to iPhone")
+    }
+  }
+
+  func clearNewTaskFeedback() {
+    newTaskFeedback = nil
   }
 
   func requestSnapshot() {
@@ -136,9 +172,14 @@ final class WatchStore: NSObject, ObservableObject, WCSessionDelegate {
       return
     }
     DispatchQueue.main.async {
+      let previous = self.snapshot
       self.snapshot = decoded
-      if persist {
-        UserDefaults.standard.set(json, forKey: Self.snapshotDefaultsKey)
+      guard persist else { return }
+      UserDefaults.standard.set(json, forKey: Self.snapshotDefaultsKey)
+      if let previous,
+        let haptic = WatchAttentionHaptic.forTransition(from: previous.threads, to: decoded.threads)
+      {
+        WKInterfaceDevice.current().play(haptic)
       }
     }
   }
@@ -161,6 +202,16 @@ final class WatchStore: NSObject, ObservableObject, WCSessionDelegate {
       return
     }
     DispatchQueue.main.async {
+      if result.commandId == self.newTaskCommandId {
+        self.newTaskCommandId = nil
+        self.isStartingTask = false
+        self.newTaskFeedback = WatchFeedback(
+          ok: result.ok,
+          text: result.ok ? "Task queued" : (result.error ?? "Failed")
+        )
+        WKInterfaceDevice.current().play(result.ok ? .success : .failure)
+        return
+      }
       guard let threadId = self.threadIdByCommandId.removeValue(forKey: result.commandId) else {
         return
       }
@@ -208,5 +259,38 @@ final class WatchStore: NSObject, ObservableObject, WCSessionDelegate {
 
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
     handleMessage(userInfo)
+  }
+}
+
+/// The one haptic worth playing when a live snapshot lands, strongest first: a
+/// thread that newly needs the user, then a run that failed, then one that
+/// finished. Only changes count, so a thread that merely scrolls into the
+/// capped list stays silent. Haptics play only while the app is on screen;
+/// notifications cover the rest.
+enum WatchAttentionHaptic {
+  static func forTransition(from previous: [WatchThread], to next: [WatchThread]) -> WKHapticType? {
+    let previousPhases = Dictionary(
+      previous.map { ($0.id, $0.resolvedPhase) },
+      uniquingKeysWith: { first, _ in first }
+    )
+    var needsUser = false
+    var failed = false
+    var completed = false
+    for thread in next {
+      let phase = thread.resolvedPhase
+      let before = previousPhases[thread.id]
+      guard before != phase else { continue }
+      if phase.needsUser {
+        needsUser = true
+      } else if phase == .failed, before?.isActive == true {
+        failed = true
+      } else if phase == .completed, before?.isActive == true {
+        completed = true
+      }
+    }
+    if needsUser { return .notification }
+    if failed { return .failure }
+    if completed { return .success }
+    return nil
   }
 }

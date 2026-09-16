@@ -11,8 +11,18 @@ struct WatchSnapshot: Codable {
   let generatedAt: String
   let quickReplies: [String]
   let threads: [WatchThread]
+  /// Absent from snapshots sent by phone builds that predate starting tasks.
+  let projects: [WatchProject]?
 
   var generatedDate: Date? { ISO8601.date(from: generatedAt) }
+}
+
+struct WatchProject: Codable, Identifiable, Hashable {
+  let environmentId: String
+  let projectId: String
+  let title: String
+
+  var id: String { "\(environmentId):\(projectId)" }
 }
 
 struct WatchThread: Codable, Identifiable, Hashable {

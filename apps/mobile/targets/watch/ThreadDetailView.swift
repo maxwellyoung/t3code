@@ -252,7 +252,6 @@ private struct ReplySection: View {
   @EnvironmentObject private var store: WatchStore
   let thread: WatchThread
 
-  @State private var draft = ""
 
   var body: some View {
     Section("Reply") {
@@ -261,11 +260,11 @@ private struct ReplySection: View {
           store.reply(reply, in: thread)
         }
       }
-      TextField("Dictate…", text: $draft)
-        .onSubmit {
-          store.reply(draft, in: thread)
-          draft = ""
-        }
+      TextFieldLink(prompt: Text("Reply")) {
+        Label("Reply by voice", systemImage: "mic.fill")
+      } onSubmit: { text in
+        store.reply(text, in: thread)
+      }
     }
   }
 }
