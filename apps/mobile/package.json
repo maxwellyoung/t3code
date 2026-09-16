@@ -45,7 +45,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bacons/apple-targets": "5.0.0",
     "@clerk/expo": "catalog:",
     "@effect/atom-react": "catalog:",
     "@expo-google-fonts/dm-sans": "^0.4.2",
@@ -128,6 +127,7 @@
     "uniwind": "1.11.0"
   },
   "devDependencies": {
+    "@bacons/apple-targets": "5.0.0",
     "@effect/vitest": "catalog:",
     "@pierre/trees": "1.0.0-beta.4",
     "@types/react": "~19.2.0",
