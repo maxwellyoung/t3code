@@ -12,6 +12,10 @@ Tasks are grouped by what they need from you:
 
 Tap a task to see its project, model and current status. While the watch app is open, it taps your wrist when a task starts needing you, finishes or fails.
 
+## Watch face
+
+Add the **T3 Code** complication to a watch face or the Smart Stack to see how many tasks need you and how many are working without opening the app. It updates when the watch app receives new status, and asks you to open the app when its numbers are more than an hour old.
+
 ## Start a task
 
 Tap **+** on the task list, choose a project and say what you want done. The task runs in the project's current checkout, using the project's default model or the model and settings of its most recent task, and appears under **Working** once your iPhone delivers it. A project is offered once it has at least one task.

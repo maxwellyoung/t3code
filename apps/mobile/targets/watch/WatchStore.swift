@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import WatchConnectivity
 import WatchKit
+import WidgetKit
 
 /// Feedback for the last command sent from a thread screen.
 struct WatchFeedback: Equatable {
@@ -174,6 +175,7 @@ final class WatchStore: NSObject, ObservableObject, WCSessionDelegate {
     DispatchQueue.main.async {
       let previous = self.snapshot
       self.snapshot = decoded
+      Self.refreshComplication(for: decoded.threads)
       guard persist else { return }
       UserDefaults.standard.set(json, forKey: Self.snapshotDefaultsKey)
       if let previous,
@@ -182,6 +184,17 @@ final class WatchStore: NSObject, ObservableObject, WCSessionDelegate {
         WKInterfaceDevice.current().play(haptic)
       }
     }
+  }
+
+  /// Writes the complication summary and reloads its timeline, but only when
+  /// what it shows changed.
+  private static func refreshComplication(for threads: [WatchThread]) {
+    let summary = WatchComplicationSummary(threads: threads, at: Date())
+    if let current = WatchComplicationStore.load(), current.hasSameContent(as: summary) {
+      return
+    }
+    WatchComplicationStore.save(summary)
+    WidgetCenter.shared.reloadAllTimelines()
   }
 
   private func restoreSnapshot() {
@@ -292,5 +305,18 @@ enum WatchAttentionHaptic {
     if failed { return .failure }
     if completed { return .success }
     return nil
+  }
+}
+
+extension WatchComplicationSummary {
+  init(threads: [WatchThread], at date: Date) {
+    let needsYou = threads.filter { $0.resolvedPhase.needsUser }
+    let working = threads.filter { $0.resolvedPhase.isActive }
+    self.init(
+      needsYouCount: needsYou.count,
+      workingCount: working.count,
+      headline: (needsYou.first ?? working.first)?.threadTitle,
+      updatedAt: date
+    )
   }
 }

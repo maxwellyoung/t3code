@@ -14,7 +14,12 @@ module.exports = (config) => ({
   displayName: config.name,
   bundleIdentifier: ".watchkitapp",
   deploymentTarget: "10.0",
-  frameworks: ["SwiftUI", "WatchConnectivity"],
+  frameworks: ["SwiftUI", "WatchConnectivity", "WidgetKit"],
+  // Shared with the complication in targets/watch-widget, which reads the
+  // summary this app writes.
+  entitlements: {
+    "com.apple.security.application-groups": [`group.${config.ios.bundleIdentifier}`],
+  },
   // apple-targets resolves `icon` relative to this directory.
   ...(typeof config.icon === "string"
     ? { icon: path.relative(__dirname, path.resolve(__dirname, "..", "..", config.icon)) }
