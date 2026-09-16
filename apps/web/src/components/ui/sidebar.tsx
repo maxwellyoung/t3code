@@ -21,6 +21,14 @@ import { useResizeDrag } from "~/hooks/useResizeDrag";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { getLocalStorageItem, setLocalStorageItem } from "~/hooks/useLocalStorage";
 import { resolveSidebarState, type ResponsiveSidebarState } from "./sidebarState";
+import {
+  isHoverPeekPointerType,
+  shouldClosePeekForPointer,
+  SIDEBAR_HOVER_PEEK_CLOSE_DELAY_MS,
+  SIDEBAR_HOVER_PEEK_EDGE_WIDTH_PX,
+  SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR,
+  SIDEBAR_HOVER_PEEK_OPEN_DELAY_MS,
+} from "./sidebarHoverPeek";
 import * as Schema from "effect/Schema";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
@@ -178,10 +186,96 @@ function SidebarProvider({
   );
 }
 
+/**
+ * Floats a collapsed offcanvas sidebar back over the content while the pointer
+ * rests on the window edge it hides behind. Returns handlers for the edge strip
+ * and a ref for the panel, whose width defines the region that holds it open.
+ */
+function useSidebarHoverPeek(enabled: boolean) {
+  const [peeking, setPeeking] = React.useState(false);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const openTimeoutRef = React.useRef(0);
+  const closeTimeoutRef = React.useRef(0);
+
+  // Adjusted during render rather than in an effect: opening the sidebar for
+  // real has to drop the peek before the next paint, or collapsing it again
+  // would spring the panel back without a fresh dwell on the edge.
+  if (peeking && !enabled) {
+    setPeeking(false);
+  }
+
+  const onEdgePointerEnter = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!enabled || !isHoverPeekPointerType(event.pointerType)) return;
+      window.clearTimeout(openTimeoutRef.current);
+      openTimeoutRef.current = window.setTimeout(
+        () => setPeeking(true),
+        SIDEBAR_HOVER_PEEK_OPEN_DELAY_MS,
+      );
+    },
+    [enabled],
+  );
+
+  const onEdgePointerLeave = React.useCallback(() => {
+    window.clearTimeout(openTimeoutRef.current);
+  }, []);
+
+  // Closing is driven by pointer position rather than the panel's own
+  // pointerleave: a row's context menu portals outside the panel, and a
+  // pointerleave into that menu would collapse the panel under it.
+  React.useEffect(() => {
+    if (!peeking) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    // offsetWidth ignores the transform that slides the panel in, so it is the
+    // settled width even mid-animation, and it is read once per peek.
+    const panelWidth = panel.offsetWidth;
+
+    const cancelClose = () => {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = 0;
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      const shouldClose = shouldClosePeekForPointer({
+        holdOpen: document.querySelector(SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR) !== null,
+        panelWidth,
+        pointerX: event.clientX,
+      });
+      if (!shouldClose) {
+        cancelClose();
+        return;
+      }
+      if (closeTimeoutRef.current) return;
+      closeTimeoutRef.current = window.setTimeout(() => {
+        closeTimeoutRef.current = 0;
+        setPeeking(false);
+      }, SIDEBAR_HOVER_PEEK_CLOSE_DELAY_MS);
+    };
+
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      cancelClose();
+    };
+  }, [peeking]);
+
+  React.useEffect(
+    () => () => {
+      window.clearTimeout(openTimeoutRef.current);
+      window.clearTimeout(closeTimeoutRef.current);
+    },
+    [],
+  );
+
+  return { onEdgePointerEnter, onEdgePointerLeave, panelRef, peeking };
+}
+
 function Sidebar({
   side = "left",
   variant = "sidebar",
   collapsible = "offcanvas",
+  hoverPeek = false,
   resizable = false,
   className,
   children,
@@ -190,6 +284,8 @@ function Sidebar({
   side?: "left" | "right";
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
+  /** Reveal the collapsed panel while the pointer rests on the window edge. */
+  hoverPeek?: boolean;
   resizable?: boolean | SidebarResizableOptions;
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
@@ -210,6 +306,12 @@ function Sidebar({
   const instanceContextValue = React.useMemo<SidebarInstanceContextProps>(
     () => ({ side, resizable: resolvedResizable }),
     [resolvedResizable, side],
+  );
+  // Left side only: the peek region is measured from the window's left edge,
+  // and the app has never shipped a right-hand thread sidebar.
+  const hoverPeekAvailable = hoverPeek && side === "left" && collapsible === "offcanvas";
+  const { onEdgePointerEnter, onEdgePointerLeave, panelRef, peeking } = useSidebarHoverPeek(
+    hoverPeekAvailable && !isMobile && state === "collapsed",
   );
 
   if (collapsible === "none") {
@@ -272,11 +374,22 @@ function Sidebar({
       <div
         className="group peer hidden text-sidebar-foreground md:block"
         data-collapsible={state === "collapsed" ? collapsible : ""}
+        data-peek={peeking ? "true" : ""}
         data-side={side}
         data-slot="sidebar"
         data-state={state}
         data-variant={variant}
       >
+        {hoverPeekAvailable && state === "collapsed" ? (
+          <div
+            aria-hidden="true"
+            className="fixed inset-y-0 left-0 z-45"
+            data-slot="sidebar-peek-edge"
+            onPointerEnter={onEdgePointerEnter}
+            onPointerLeave={onEdgePointerLeave}
+            style={{ width: SIDEBAR_HOVER_PEEK_EDGE_WIDTH_PX }}
+          />
+        ) : null}
         {/* This is what handles the sidebar gap on desktop */}
         <div
           className={cn(
@@ -301,9 +414,14 @@ function Sidebar({
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
               : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            // Peek floats the panel over the content: the gap above stays at
+            // zero width, so nothing reflows while it slides in and out.
+            "group-data-[peek=true]:left-0! group-data-[peek=true]:z-45",
+            "group-data-[peek=true]:shadow-[0_0_32px_-8px_rgb(0_0_0/45%)] dark:group-data-[peek=true]:shadow-[0_0_36px_-8px_rgb(0_0_0/70%)]",
             className,
           )}
           data-slot="sidebar-container"
+          ref={panelRef}
           {...props}
         >
           <div
