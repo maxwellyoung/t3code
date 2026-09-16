@@ -92,9 +92,9 @@ import {
   threadTraversalDirectionFromCommand,
 } from "../keybindings";
 import { useShortcutModifierState } from "../shortcutModifierState";
-import { resolveThreadSwitcherHoldModifier } from "../threadSwitcher";
+import { resolveThreadSwitcherEntries, resolveThreadSwitcherHoldModifier } from "../threadSwitcher";
 import { useThreadSwitcher } from "../hooks/useThreadSwitcher";
-import { ThreadSwitcherOverlay, type ThreadSwitcherEntry } from "./ThreadSwitcherOverlay";
+import { ThreadSwitcherOverlay } from "./ThreadSwitcherOverlay";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
@@ -4277,22 +4277,18 @@ export default function Sidebar() {
   });
   const { advance: advanceThreadSwitcher } = threadSwitcher;
   const switcherThreadKeys = threadSwitcher.threadKeys;
-  const threadSwitcherEntries = useMemo<readonly ThreadSwitcherEntry[]>(
+  const threadSwitcherEntries = useMemo(
     () =>
       switcherThreadKeys === null
         ? []
-        : switcherThreadKeys.flatMap((threadKey) => {
+        : resolveThreadSwitcherEntries(switcherThreadKeys, (threadKey) => {
             const thread = threadByKey.get(threadKey);
-            if (!thread) return [];
-            return [
-              {
-                subtitle:
-                  projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ??
-                  null,
-                threadKey,
-                title: thread.title,
-              },
-            ];
+            if (!thread) return null;
+            return {
+              subtitle:
+                projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null,
+              title: thread.title,
+            };
           }),
     [projectDisplayNameByKey, switcherThreadKeys, threadByKey],
   );

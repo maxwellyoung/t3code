@@ -101,3 +101,32 @@ export function advanceThreadSwitcherIndex(input: {
   const step = input.direction === "next" ? 1 : -1;
   return (((input.index + step) % input.count) + input.count) % input.count;
 }
+
+export interface ThreadSwitcherEntry {
+  readonly threadKey: string;
+  /** Null once the thread has left the sidebar while the switcher is open. */
+  readonly title: string | null;
+  readonly subtitle: string | null;
+}
+
+/**
+ * One entry per key in the switch's snapshot, in the same order, so the row
+ * the overlay highlights is always the thread that releasing opens. A thread
+ * that leaves the sidebar mid-switch keeps its row, marked removed, rather than
+ * dropping out and shifting every row below it off its index.
+ */
+export function resolveThreadSwitcherEntries(
+  threadKeys: readonly string[],
+  describe: (
+    threadKey: string,
+  ) => { readonly title: string; readonly subtitle: string | null } | null,
+): readonly ThreadSwitcherEntry[] {
+  return threadKeys.map((threadKey) => {
+    const description = describe(threadKey);
+    return {
+      threadKey,
+      title: description?.title ?? null,
+      subtitle: description?.subtitle ?? null,
+    };
+  });
+}

@@ -4,6 +4,7 @@ import {
   advanceThreadSwitcherIndex,
   isThreadSwitcherHoldModifierKey,
   recordThreadSwitcherVisit,
+  resolveThreadSwitcherEntries,
   resolveThreadSwitcherHoldModifier,
   resolveThreadSwitcherOrder,
   THREAD_SWITCHER_ENTRY_LIMIT,
@@ -108,5 +109,21 @@ describe("thread switcher index", () => {
 
   it("stays at zero with nothing to switch between", () => {
     expect(advanceThreadSwitcherIndex({ index: 0, count: 0, direction: "next" })).toBe(0);
+  });
+});
+
+describe("thread switcher entries", () => {
+  it("keeps a removed thread's row so the highlight and the opened thread stay aligned", () => {
+    const threadKeys = ["active", "archived-mid-switch", "highlighted"];
+    const entries = resolveThreadSwitcherEntries(threadKeys, (threadKey) =>
+      threadKey === "archived-mid-switch" ? null : { title: threadKey, subtitle: null },
+    );
+
+    expect(entries.map((entry) => entry.threadKey)).toEqual(threadKeys);
+    expect(entries[1]?.title).toBeNull();
+    // Release opens threadKeys[index]; the overlay highlights entries[index].
+    const index = 2;
+    expect(entries[index]?.threadKey).toBe(threadKeys[index]);
+    expect(entries[index]?.title).toBe("highlighted");
   });
 });

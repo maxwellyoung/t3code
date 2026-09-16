@@ -110,9 +110,9 @@ import {
 } from "../keybindings";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
-import { resolveThreadSwitcherHoldModifier } from "../threadSwitcher";
+import { resolveThreadSwitcherEntries, resolveThreadSwitcherHoldModifier } from "../threadSwitcher";
 import { useThreadSwitcher } from "../hooks/useThreadSwitcher";
-import { ThreadSwitcherOverlay, type ThreadSwitcherEntry } from "./ThreadSwitcherOverlay";
+import { ThreadSwitcherOverlay } from "./ThreadSwitcherOverlay";
 import { ensureLocalApi, readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
@@ -3580,13 +3580,13 @@ export default function LegacySidebar() {
   });
   const { advance: advanceThreadSwitcher } = threadSwitcher;
   const switcherThreadKeys = threadSwitcher.threadKeys;
-  const threadSwitcherEntries = useMemo<readonly ThreadSwitcherEntry[]>(
+  const threadSwitcherEntries = useMemo(
     () =>
       switcherThreadKeys === null
         ? []
-        : switcherThreadKeys.flatMap((threadKey) => {
+        : resolveThreadSwitcherEntries(switcherThreadKeys, (threadKey) => {
             const thread = sidebarThreadByKey.get(threadKey);
-            return thread ? [{ subtitle: null, threadKey, title: thread.title }] : [];
+            return thread ? { subtitle: null, title: thread.title } : null;
           }),
     [sidebarThreadByKey, switcherThreadKeys],
   );

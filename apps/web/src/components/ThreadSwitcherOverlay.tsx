@@ -1,12 +1,9 @@
 import { createPortal } from "react-dom";
 
 import { cn } from "../lib/utils";
+import type { ThreadSwitcherEntry } from "../threadSwitcher";
 
-export interface ThreadSwitcherEntry {
-  readonly threadKey: string;
-  readonly title: string;
-  readonly subtitle: string | null;
-}
+const REMOVED_THREAD_LABEL = "Removed thread";
 
 /**
  * The list shown while a traversal chord is held. Keyboard-only and inert to the
@@ -21,6 +18,7 @@ export function ThreadSwitcherOverlay({
   index: number;
 }) {
   if (entries.length === 0) return null;
+  const selected = entries[index];
 
   // Portalled to the body: the sidebar it is rendered from is a positioned,
   // transitioning panel, and a fixed child of one is positioned against it.
@@ -29,6 +27,12 @@ export function ThreadSwitcherOverlay({
       className="pointer-events-none fixed inset-0 z-100 flex items-center justify-center p-4"
       data-thread-switcher=""
     >
+      {/* Focus stays in the app while switching, so the listbox's selection is
+          never announced on its own. Kept outside the listbox, which may only
+          contain options. */}
+      <span className="sr-only" role="status">
+        {selected ? (selected.title ?? REMOVED_THREAD_LABEL) : ""}
+      </span>
       <div
         aria-label="Recent threads"
         className="dropdown-glass w-[min(26rem,100%)] rounded-xl p-1.5 shadow-[0_24px_60px_-24px_rgb(0_0_0/60%)]"
@@ -44,7 +48,14 @@ export function ThreadSwitcherOverlay({
             key={entry.threadKey}
             role="option"
           >
-            <span className="min-w-0 flex-1 truncate text-sm">{entry.title}</span>
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate text-sm",
+                entry.title === null && "text-muted-foreground italic",
+              )}
+            >
+              {entry.title ?? REMOVED_THREAD_LABEL}
+            </span>
             {entry.subtitle === null ? null : (
               <span className="shrink-0 truncate text-muted-foreground text-xs">
                 {entry.subtitle}
