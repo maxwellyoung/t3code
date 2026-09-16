@@ -1,3 +1,4 @@
+import { ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import type {
   EnvironmentProject,
@@ -176,14 +177,47 @@ describe("buildWatchSnapshotBody", () => {
 
   it("serializes with a generation timestamp", () => {
     const json = serializeWatchSnapshot(
-      { version: 1, quickReplies: [], threads: [] },
+      { version: 1, quickReplies: [], threads: [], projects: [] },
       "2026-08-26T03:00:00.000Z",
     );
     expect(JSON.parse(json)).toEqual({
       version: 1,
       quickReplies: [],
       threads: [],
+      projects: [],
       generatedAt: "2026-08-26T03:00:00.000Z",
     });
+  });
+
+  it("offers projects with a live thread to start tasks in, most recently active first", () => {
+    const t3code = {
+      environmentId: "env-1",
+      id: "project-2",
+      title: "T3 Code",
+    } as EnvironmentProject;
+    const archivedOnly = {
+      environmentId: "env-1",
+      id: "project-3",
+      title: "Archived only",
+    } as EnvironmentProject;
+    const body = buildWatchSnapshotBody({
+      shells: [
+        shell("a", { updatedAt: "2026-08-26T01:00:00.000Z" }),
+        shell("b", {
+          projectId: ProjectId.make("project-2"),
+          updatedAt: "2026-08-26T02:00:00.000Z",
+        }),
+        shell("c", {
+          projectId: ProjectId.make("project-3"),
+          archivedAt: "2026-08-26T03:00:00.000Z",
+        }),
+      ],
+      projects: [project, t3code, archivedOnly],
+      requestsByThreadKey: {},
+    });
+    expect(body.projects).toEqual([
+      { environmentId: "env-1", projectId: "project-2", title: "T3 Code" },
+      { environmentId: "env-1", projectId: "project-1", title: "Silk" },
+    ]);
   });
 });

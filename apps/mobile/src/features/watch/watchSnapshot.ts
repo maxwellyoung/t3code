@@ -13,6 +13,7 @@ import type { PendingApproval, PendingUserInput } from "../../lib/threadActivity
  */
 export const WATCH_SNAPSHOT_VERSION = 1;
 export const WATCH_SNAPSHOT_MAX_THREADS = 20;
+export const WATCH_SNAPSHOT_MAX_PROJECTS = 8;
 const WATCH_DETAIL_MAX_CHARS = 240;
 
 export interface WatchApprovalOption {
@@ -62,11 +63,22 @@ export interface WatchThread {
   readonly userInputs: ReadonlyArray<WatchUserInput>;
 }
 
+export interface WatchProject {
+  readonly environmentId: string;
+  readonly projectId: string;
+  readonly title: string;
+}
+
 export interface WatchSnapshotBody {
   readonly version: typeof WATCH_SNAPSHOT_VERSION;
   /** One-tap replies the watch offers on every thread; first is primary. */
   readonly quickReplies: ReadonlyArray<string>;
   readonly threads: ReadonlyArray<WatchThread>;
+  /**
+   * Projects a task can be started in from the watch, most recently active
+   * first. Only projects with a thread qualify: a new task inherits its settings.
+   */
+  readonly projects: ReadonlyArray<WatchProject>;
 }
 
 // Short enough to fit a watch button, generic enough to move any agent along.
@@ -162,9 +174,15 @@ export function buildWatchSnapshotBody(input: BuildWatchSnapshotInput): WatchSna
   }
 
   const threads: WatchThread[] = [];
+  const latestUpdateByProject = new Map<string, string>();
   for (const shell of input.shells) {
     if (shell.archivedAt !== null) {
       continue;
+    }
+    const projectKey = `${shell.environmentId}:${shell.projectId}`;
+    const latestUpdate = latestUpdateByProject.get(projectKey);
+    if (latestUpdate === undefined || shell.updatedAt > latestUpdate) {
+      latestUpdateByProject.set(projectKey, shell.updatedAt);
     }
     const projectTitle =
       projectTitles.get(`${shell.environmentId}:${shell.projectId}`) ?? "Project";
@@ -205,10 +223,24 @@ export function buildWatchSnapshotBody(input: BuildWatchSnapshotInput): WatchSna
     return right.updatedAt.localeCompare(left.updatedAt);
   });
 
+  const projects = input.projects
+    .flatMap((project) => {
+      const latestUpdate = latestUpdateByProject.get(`${project.environmentId}:${project.id}`);
+      return latestUpdate === undefined ? [] : [{ project, latestUpdate }];
+    })
+    .sort((left, right) => right.latestUpdate.localeCompare(left.latestUpdate))
+    .slice(0, WATCH_SNAPSHOT_MAX_PROJECTS)
+    .map(({ project }) => ({
+      environmentId: project.environmentId,
+      projectId: project.id,
+      title: project.title,
+    }));
+
   return {
     version: WATCH_SNAPSHOT_VERSION,
     quickReplies: WATCH_QUICK_REPLIES,
     threads: threads.slice(0, WATCH_SNAPSHOT_MAX_THREADS),
+    projects,
   };
 }
 

@@ -42,6 +42,17 @@ describe("parseWatchCommand", () => {
     expect(
       parseWatchCommand(
         JSON.stringify({
+          type: "startThread",
+          commandId: "c5",
+          environmentId: "env",
+          projectId: "project",
+          text: "Fix the flaky login test",
+        }),
+      ),
+    ).toMatchObject({ type: "startThread", projectId: "project" });
+    expect(
+      parseWatchCommand(
+        JSON.stringify({
           type: "interruptTurn",
           commandId: "c4",
           environmentId: "env",

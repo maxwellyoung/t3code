@@ -34,6 +34,14 @@ const RespondToUserInputCommand = Schema.Struct({
   answers: Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Array(Schema.String)])),
 });
 
+const StartThreadCommand = Schema.Struct({
+  type: Schema.Literal("startThread"),
+  commandId: Schema.String,
+  environmentId: Schema.String,
+  projectId: Schema.String,
+  text: Schema.String,
+});
+
 const InterruptTurnCommand = Schema.Struct({
   type: Schema.Literal("interruptTurn"),
   commandId: Schema.String,
@@ -49,6 +57,7 @@ export const WatchCommand = Schema.Union([
   RespondToApprovalCommand,
   RespondToUserInputCommand,
   SendMessageCommand,
+  StartThreadCommand,
   InterruptTurnCommand,
   RequestSnapshotCommand,
 ]);

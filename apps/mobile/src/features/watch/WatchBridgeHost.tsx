@@ -12,13 +12,15 @@ import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { makeQueuedMessageMetadata } from "../../lib/commandMetadata";
+import { makeQueuedMessageMetadata, makeTurnCommandMetadata } from "../../lib/commandMetadata";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { useProjects, useThreadShells } from "../../state/entities";
 import { threadEnvironment, useEnvironmentThread } from "../../state/threads";
+import { enqueueThreadOutboxMessage } from "../../state/thread-outbox";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { resolveWatchBridge } from "./watchBridgeModule";
 import { parseWatchCommand, serializeWatchCommandResult, type WatchCommand } from "./watchCommands";
+import { buildWatchNewTaskMessage } from "./watchNewTask";
 import {
   buildWatchSnapshotBody,
   serializeWatchSnapshot,
@@ -115,8 +117,13 @@ function WatchBridge() {
     pushSnapshot(false);
   }, [pushSnapshot]);
 
+  // Commands arrive from native events; they read the latest lists at arrival.
   const shellsRef = useRef(shells);
-  shellsRef.current = shells;
+  const projectsRef = useRef(projects);
+  useEffect(() => {
+    shellsRef.current = shells;
+    projectsRef.current = projects;
+  }, [projects, shells]);
 
   const runCommand = useCallback(
     async (command: WatchCommand): Promise<void> => {
@@ -129,11 +136,6 @@ function WatchBridge() {
         return;
       }
 
-      const environmentId = EnvironmentId.make(command.environmentId);
-      const threadId = ThreadId.make(command.threadId);
-      const shell = shellsRef.current.find(
-        (candidate) => candidate.environmentId === environmentId && candidate.id === threadId,
-      );
       const finish = (ok: boolean, error: string | null) => {
         bridge.sendMessage(
           serializeWatchCommandResult({
@@ -144,6 +146,34 @@ function WatchBridge() {
           }),
         );
       };
+
+      if (command.type === "startThread") {
+        const message = buildWatchNewTaskMessage({
+          environmentId: command.environmentId,
+          projectId: command.projectId,
+          text: command.text,
+          projects: projectsRef.current,
+          shells: shellsRef.current,
+          metadata: makeTurnCommandMetadata(),
+        });
+        if (message === null) {
+          finish(false, "That project can't start a task from the watch.");
+          return;
+        }
+        try {
+          await enqueueThreadOutboxMessage(message);
+          finish(true, null);
+        } catch (error) {
+          finish(false, error instanceof Error ? error.message : "The task could not be queued.");
+        }
+        return;
+      }
+
+      const environmentId = EnvironmentId.make(command.environmentId);
+      const threadId = ThreadId.make(command.threadId);
+      const shell = shellsRef.current.find(
+        (candidate) => candidate.environmentId === environmentId && candidate.id === threadId,
+      );
       if (shell === undefined) {
         finish(false, "That task is no longer available.");
         return;
