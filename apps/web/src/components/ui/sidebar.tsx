@@ -232,6 +232,9 @@ function useSidebarHoverPeek(enabled: boolean) {
     const panelWidth = panel.offsetWidth;
     // The peek opened from the edge strip, so the pointer starts over the panel.
     let pointerX = 0;
+    // Web right-click menus carry no trigger in the DOM, so where the click
+    // landed decides whether the open one belongs to the panel.
+    let contextMenuFromPanel = false;
 
     const cancelClose = () => {
       window.clearTimeout(closeTimeoutRef.current);
@@ -241,11 +244,9 @@ function useSidebarHoverPeek(enabled: boolean) {
     const evaluate = () => {
       const shouldClose = shouldClosePeekForPointer({
         // Scoped to the panel: only a menu opened from one of its rows holds it.
-        // Web right-click menus are built outside Base UI and have no trigger in
-        // the panel; while peeked, the click that opened one landed on the panel.
         holdOpen:
           panel.querySelector(SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR) !== null ||
-          isContextMenuOpen(),
+          (contextMenuFromPanel && isContextMenuOpen()),
         panelWidth,
         pointerX,
       });
@@ -264,6 +265,9 @@ function useSidebarHoverPeek(enabled: boolean) {
       pointerX = event.clientX;
       evaluate();
     };
+    const onContextMenu = (event: MouseEvent) => {
+      contextMenuFromPanel = event.target instanceof Node && panel.contains(event.target);
+    };
     // Leaving the window through the top or bottom produces no further moves.
     const onViewportLeave = () => {
       pointerX = Number.POSITIVE_INFINITY;
@@ -276,11 +280,14 @@ function useSidebarHoverPeek(enabled: boolean) {
     const contextMenuObserver = new MutationObserver(evaluate);
 
     window.addEventListener("pointermove", onPointerMove, { passive: true });
+    // Capture phase: row handlers may stop the event before it bubbles.
+    document.addEventListener("contextmenu", onContextMenu, true);
     document.documentElement.addEventListener("mouseleave", onViewportLeave);
     menuObserver.observe(panel, { attributeFilter: ["aria-expanded"], subtree: true });
     contextMenuObserver.observe(document.body, { childList: true });
     return () => {
       window.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("contextmenu", onContextMenu, true);
       document.documentElement.removeEventListener("mouseleave", onViewportLeave);
       menuObserver.disconnect();
       contextMenuObserver.disconnect();
