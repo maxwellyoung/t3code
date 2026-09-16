@@ -92,6 +92,9 @@ import {
   threadTraversalDirectionFromCommand,
 } from "../keybindings";
 import { useShortcutModifierState } from "../shortcutModifierState";
+import { resolveThreadSwitcherHoldModifier } from "../threadSwitcher";
+import { useThreadSwitcher } from "../hooks/useThreadSwitcher";
+import { ThreadSwitcherOverlay, type ThreadSwitcherEntry } from "./ThreadSwitcherOverlay";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
@@ -4258,6 +4261,41 @@ export default function Sidebar() {
       ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
       : false,
   );
+  const openThreadByKey = useCallback(
+    (threadKey: string) => {
+      const thread = threadByKey.get(threadKey);
+      if (!thread) return false;
+      navigateToThread(scopeThreadRef(thread.environmentId, thread.id));
+      return true;
+    },
+    [navigateToThread, threadByKey],
+  );
+  const threadSwitcher = useThreadSwitcher({
+    navigateToThreadKey: openThreadByKey,
+    orderedThreadKeys,
+    routeThreadKey,
+  });
+  const { advance: advanceThreadSwitcher } = threadSwitcher;
+  const switcherThreadKeys = threadSwitcher.threadKeys;
+  const threadSwitcherEntries = useMemo<readonly ThreadSwitcherEntry[]>(
+    () =>
+      switcherThreadKeys === null
+        ? []
+        : switcherThreadKeys.flatMap((threadKey) => {
+            const thread = threadByKey.get(threadKey);
+            if (!thread) return [];
+            return [
+              {
+                subtitle:
+                  projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ??
+                  null,
+                threadKey,
+                title: thread.title,
+              },
+            ];
+          }),
+    [projectDisplayNameByKey, switcherThreadKeys, threadByKey],
+  );
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || isCommandPaletteOpen() || isModelPickerOpen()) {
@@ -4273,15 +4311,24 @@ export default function Sidebar() {
       });
       const navigateToThreadKey = (targetThreadKey: string | null) => {
         if (!targetThreadKey) return false;
-        const targetThread = threadByKey.get(targetThreadKey);
-        if (!targetThread) return false;
+        if (!openThreadByKey(targetThreadKey)) return false;
         event.preventDefault();
         event.stopPropagation();
-        navigateToThread(scopeThreadRef(targetThread.environmentId, targetThread.id));
         return true;
       };
       const traversalDirection = threadTraversalDirectionFromCommand(command);
       if (traversalDirection !== null) {
+        // Held modifier means the chord can be released, so the switcher takes
+        // over: cycle by recency now, load the thread on release. A binding
+        // without one has nothing to release, and steps to the neighbouring
+        // thread in the sidebar as it always has.
+        const holdModifier = resolveThreadSwitcherHoldModifier(event);
+        if (holdModifier !== null) {
+          event.preventDefault();
+          event.stopPropagation();
+          advanceThreadSwitcher(holdModifier, traversalDirection);
+          return;
+        }
         navigateToThreadKey(
           resolveAdjacentThreadId({
             threadIds: orderedThreadKeys,
@@ -4298,12 +4345,12 @@ export default function Sidebar() {
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
   }, [
+    advanceThreadSwitcher,
     keybindings,
-    navigateToThread,
+    openThreadByKey,
     orderedThreadKeys,
     routeTerminalOpen,
     routeThreadKey,
-    threadByKey,
   ]);
 
   // Same predicate as v1: hints show only while the held modifiers exactly
@@ -4911,6 +4958,7 @@ export default function Sidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarChromeFooter />
+      <ThreadSwitcherOverlay entries={threadSwitcherEntries} index={threadSwitcher.index} />
     </>
   );
 }
