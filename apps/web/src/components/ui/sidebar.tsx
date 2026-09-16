@@ -189,7 +189,15 @@ function SidebarProvider({
 /**
  * Floats a collapsed offcanvas sidebar back over the content while the pointer
  * rests on the window edge it hides behind. Returns handlers for the edge strip
- * and a ref for the panel, whose width defines the region that holds it open.
+ * and a ref for the panel.
+ *
+ * Closing follows the pointer's position rather than the panel's pointerleave,
+ * because a row's menu portals outside the panel and hovering it must not
+ * collapse the panel underneath. The panel stays open while one of its own
+ * menus or popovers is expanded, or while a web right-click menu opened on it
+ * is showing. Menus elsewhere in the app never hold it. Dismissing a menu with
+ * the keyboard, or leaving the window, produces no pointer move, so those
+ * re-run the same check against the last known position.
  */
 function useSidebarHoverPeek(enabled: boolean) {
   const [peeking, setPeeking] = React.useState(false);
@@ -197,9 +205,8 @@ function useSidebarHoverPeek(enabled: boolean) {
   const openTimeoutRef = React.useRef(0);
   const closeTimeoutRef = React.useRef(0);
 
-  // Adjusted during render rather than in an effect: opening the sidebar for
-  // real has to drop the peek before the next paint, or collapsing it again
-  // would spring the panel back without a fresh dwell on the edge.
+  // Adjusted during render so opening the sidebar for real drops the peek before
+  // the next paint; collapsing again then needs a fresh dwell on the edge.
   if (peeking && !enabled) {
     setPeeking(false);
   }
@@ -220,20 +227,12 @@ function useSidebarHoverPeek(enabled: boolean) {
     window.clearTimeout(openTimeoutRef.current);
   }, []);
 
-  // Closing is driven by pointer position rather than the panel's own
-  // pointerleave: a row's context menu portals outside the panel, and a
-  // pointerleave into that menu would collapse the panel under it.
   React.useEffect(() => {
     if (!peeking) return;
     const panel = panelRef.current;
     if (!panel) return;
-    // offsetWidth ignores the transform that slides the panel in, so it is the
-    // settled width even mid-animation, and it is read once per peek.
     const panelWidth = panel.offsetWidth;
-    // The peek opened from the edge strip, so the pointer starts over the panel.
     let pointerX = 0;
-    // Web right-click menus carry no trigger in the DOM, so where the click
-    // landed decides whether the open one belongs to the panel.
     let contextMenuFromPanel = false;
 
     const cancelClose = () => {
@@ -243,7 +242,6 @@ function useSidebarHoverPeek(enabled: boolean) {
 
     const evaluate = () => {
       const shouldClose = shouldClosePeekForPointer({
-        // Scoped to the panel: only a menu opened from one of its rows holds it.
         holdOpen:
           panel.querySelector(SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR) !== null ||
           (contextMenuFromPanel && isContextMenuOpen()),
@@ -268,14 +266,10 @@ function useSidebarHoverPeek(enabled: boolean) {
     const onContextMenu = (event: MouseEvent) => {
       contextMenuFromPanel = event.target instanceof Node && panel.contains(event.target);
     };
-    // Leaving the window through the top or bottom produces no further moves.
     const onViewportLeave = () => {
       pointerX = Number.POSITIVE_INFINITY;
       evaluate();
     };
-    // Dismissing a held menu with the keyboard moves nothing either, so
-    // re-check against the last pointer position when a panel menu's trigger
-    // closes, or when a right-click menu leaves the body.
     const menuObserver = new MutationObserver(evaluate);
     const contextMenuObserver = new MutationObserver(evaluate);
 
@@ -342,8 +336,7 @@ function Sidebar({
     () => ({ side, resizable: resolvedResizable }),
     [resolvedResizable, side],
   );
-  // Left side only: the peek region is measured from the window's left edge,
-  // and the app has never shipped a right-hand thread sidebar.
+  // Left side only: the peek region is measured from the window's left edge.
   const hoverPeekAvailable = hoverPeek && side === "left" && collapsible === "offcanvas";
   const { onEdgePointerEnter, onEdgePointerLeave, panelRef, peeking } = useSidebarHoverPeek(
     hoverPeekAvailable && !isMobile && state === "collapsed",
@@ -448,8 +441,7 @@ function Sidebar({
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
               : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
-            // Peek floats the panel over the content: the gap above stays at
-            // zero width, so nothing reflows while it slides in and out.
+            // The gap above stays at zero width, so peeking never reflows content.
             "group-data-[peek=true]:left-0! group-data-[peek=true]:z-45",
             "group-data-[peek=true]:shadow-[0_0_32px_-8px_rgb(0_0_0/45%)] dark:group-data-[peek=true]:shadow-[0_0_36px_-8px_rgb(0_0_0/70%)]",
             className,
