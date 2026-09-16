@@ -21,6 +21,12 @@ struct ContentView: View {
         }
       }
       .navigationTitle("T3 Code")
+      // Registered on the stack, not on each row: rows live in a lazy List,
+      // and a destination declared inside one is never seen by the stack, so
+      // tapping a thread silently did nothing.
+      .navigationDestination(for: String.self) { threadId in
+        ThreadDetailView(threadId: threadId)
+      }
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           Button {
@@ -111,9 +117,6 @@ struct ThreadRow: View {
             .lineLimit(2)
         }
       }
-    }
-    .navigationDestination(for: String.self) { threadId in
-      ThreadDetailView(threadId: threadId)
     }
   }
 }
