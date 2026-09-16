@@ -5,6 +5,7 @@ import {
   MessageId,
   ThreadId,
 } from "@t3tools/contracts";
+import { derivePendingRequests } from "@t3tools/client-runtime/pending-requests";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
@@ -13,11 +14,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { makeQueuedMessageMetadata } from "../../lib/commandMetadata";
 import { scopedThreadKey } from "../../lib/scopedEntities";
-import {
-  derivePendingApprovals,
-  derivePendingUserInputs,
-  sortThreadActivities,
-} from "../../lib/threadActivity";
 import { useProjects, useThreadShells } from "../../state/entities";
 import { threadEnvironment, useEnvironmentThread } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -265,16 +261,11 @@ function PendingRequestsProbe(props: {
   const key = scopedThreadKey(shell.environmentId, shell.id);
   const state = useEnvironmentThread(shell.environmentId, shell.id);
   const activities = Option.getOrNull(state.data)?.activities ?? null;
-  const requests = useMemo((): PendingThreadRequests | null => {
-    if (activities === null) {
-      return null;
-    }
-    const sorted = sortThreadActivities(activities);
-    return {
-      approvals: derivePendingApprovals(sorted),
-      userInputs: derivePendingUserInputs(sorted),
-    };
-  }, [activities]);
+  const requests = useMemo(
+    (): PendingThreadRequests | null =>
+      activities === null ? null : derivePendingRequests(activities),
+    [activities],
+  );
 
   useEffect(() => {
     onChange(key, requests);

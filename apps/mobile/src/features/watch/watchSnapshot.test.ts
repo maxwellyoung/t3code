@@ -118,6 +118,7 @@ describe("buildWatchSnapshotBody", () => {
     const userInput: PendingUserInput = {
       requestId: "req-2" as PendingUserInput["requestId"],
       createdAt: "2026-08-26T00:00:00.000Z",
+      dismissible: false,
       questions: [
         {
           id: "q1",
