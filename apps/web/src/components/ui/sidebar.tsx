@@ -20,12 +20,12 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useResizeDrag } from "~/hooks/useResizeDrag";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { getLocalStorageItem, setLocalStorageItem } from "~/hooks/useLocalStorage";
+import { isContextMenuOpen } from "~/contextMenuFallback";
 import { resolveSidebarState, type ResponsiveSidebarState } from "./sidebarState";
 import {
   isHoverPeekPointerType,
   shouldClosePeekForPointer,
   SIDEBAR_HOVER_PEEK_CLOSE_DELAY_MS,
-  SIDEBAR_HOVER_PEEK_EDGE_WIDTH_PX,
   SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR,
   SIDEBAR_HOVER_PEEK_OPEN_DELAY_MS,
 } from "./sidebarHoverPeek";
@@ -230,17 +230,24 @@ function useSidebarHoverPeek(enabled: boolean) {
     // offsetWidth ignores the transform that slides the panel in, so it is the
     // settled width even mid-animation, and it is read once per peek.
     const panelWidth = panel.offsetWidth;
+    // The peek opened from the edge strip, so the pointer starts over the panel.
+    let pointerX = 0;
 
     const cancelClose = () => {
       window.clearTimeout(closeTimeoutRef.current);
       closeTimeoutRef.current = 0;
     };
 
-    const onPointerMove = (event: PointerEvent) => {
+    const evaluate = () => {
       const shouldClose = shouldClosePeekForPointer({
-        holdOpen: document.querySelector(SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR) !== null,
+        // Scoped to the panel: only a menu opened from one of its rows holds it.
+        // Web right-click menus are built outside Base UI and have no trigger in
+        // the panel; while peeked, the click that opened one landed on the panel.
+        holdOpen:
+          panel.querySelector(SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR) !== null ||
+          isContextMenuOpen(),
         panelWidth,
-        pointerX: event.clientX,
+        pointerX,
       });
       if (!shouldClose) {
         cancelClose();
@@ -253,9 +260,30 @@ function useSidebarHoverPeek(enabled: boolean) {
       }, SIDEBAR_HOVER_PEEK_CLOSE_DELAY_MS);
     };
 
+    const onPointerMove = (event: PointerEvent) => {
+      pointerX = event.clientX;
+      evaluate();
+    };
+    // Leaving the window through the top or bottom produces no further moves.
+    const onViewportLeave = () => {
+      pointerX = Number.POSITIVE_INFINITY;
+      evaluate();
+    };
+    // Dismissing a held menu with the keyboard moves nothing either, so
+    // re-check against the last pointer position when a panel menu's trigger
+    // closes, or when a right-click menu leaves the body.
+    const menuObserver = new MutationObserver(evaluate);
+    const contextMenuObserver = new MutationObserver(evaluate);
+
     window.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.documentElement.addEventListener("mouseleave", onViewportLeave);
+    menuObserver.observe(panel, { attributeFilter: ["aria-expanded"], subtree: true });
+    contextMenuObserver.observe(document.body, { childList: true });
     return () => {
       window.removeEventListener("pointermove", onPointerMove);
+      document.documentElement.removeEventListener("mouseleave", onViewportLeave);
+      menuObserver.disconnect();
+      contextMenuObserver.disconnect();
       cancelClose();
     };
   }, [peeking]);
@@ -383,11 +411,10 @@ function Sidebar({
         {hoverPeekAvailable && state === "collapsed" ? (
           <div
             aria-hidden="true"
-            className="fixed inset-y-0 left-0 z-45"
+            className="fixed inset-y-0 left-0 z-45 w-2"
             data-slot="sidebar-peek-edge"
             onPointerEnter={onEdgePointerEnter}
             onPointerLeave={onEdgePointerLeave}
-            style={{ width: SIDEBAR_HOVER_PEEK_EDGE_WIDTH_PX }}
           />
         ) : null}
         {/* This is what handles the sidebar gap on desktop */}

@@ -4,9 +4,6 @@
  * The layout gap stays zero throughout, so the main pane never reflows.
  */
 
-/** Width of the invisible strip that arms the peek, in pixels. */
-export const SIDEBAR_HOVER_PEEK_EDGE_WIDTH_PX = 8;
-
 /** Pointer dwell required on the edge before peeking, so passing sweeps miss. */
 export const SIDEBAR_HOVER_PEEK_OPEN_DELAY_MS = 110;
 
@@ -17,16 +14,16 @@ export const SIDEBAR_HOVER_PEEK_CLOSE_DELAY_MS = 180;
 export const SIDEBAR_HOVER_PEEK_REGION_SLACK_PX = 12;
 
 /**
- * Selector for an open menu a peeked row can own. Menus portal out of the panel,
- * so the pointer sitting on one reads as "outside"; collapsing the panel then
- * pulls the anchor out from under an open menu.
+ * Matches a control whose menu or popover is open. Queried within the peeked
+ * panel only: a row's menu portals outside the panel, so the pointer sitting on
+ * it reads as "outside", and collapsing the panel would pull the anchor out
+ * from under it. Menus elsewhere in the app must not hold the panel open.
  *
- * Menu popups only. A broader `[role="dialog"]` also matches notification
- * toasts and every unrelated modal, any one of which would pin the panel open
- * for as long as it is on screen.
+ * `aria-expanded` rather than Base UI's `data-popup-open`, which tooltips set
+ * too: a focused row button showing its tooltip would pin the panel open.
+ * `aria-haspopup` keeps expanded disclosures, such as the settled shelf, out.
  */
-export const SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR =
-  '[data-slot="menu-popup"],[data-slot="menu-sub-content"]';
+export const SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR = '[aria-haspopup][aria-expanded="true"]';
 
 /**
  * Peek is a mouse affordance. Touch reports a tap as a hover and would open the
