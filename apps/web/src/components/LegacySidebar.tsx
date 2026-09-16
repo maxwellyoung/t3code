@@ -3605,8 +3605,6 @@ export default function LegacySidebar() {
       });
       const traversalDirection = threadTraversalDirectionFromCommand(command);
       if (traversalDirection !== null) {
-        // See the v2 sidebar: a chord with a held modifier opens the switcher
-        // and commits on release; one without steps to the neighbour directly.
         const holdModifier = resolveThreadSwitcherHoldModifier(event);
         if (holdModifier !== null) {
           event.preventDefault();

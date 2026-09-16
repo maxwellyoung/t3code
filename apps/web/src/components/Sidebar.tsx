@@ -4327,10 +4327,6 @@ export default function Sidebar() {
       };
       const traversalDirection = threadTraversalDirectionFromCommand(command);
       if (traversalDirection !== null) {
-        // Held modifier means the chord can be released, so the switcher takes
-        // over: cycle by recency now, load the thread on release. A binding
-        // without one has nothing to release, and steps to the neighbouring
-        // thread in the sidebar as it always has.
         const holdModifier = resolveThreadSwitcherHoldModifier(event);
         if (holdModifier !== null) {
           event.preventDefault();

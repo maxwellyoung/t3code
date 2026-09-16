@@ -70,8 +70,6 @@ export function useThreadSwitcher({
           history: historyRef.current,
           threadKeys: orderedThreadKeys,
         });
-        // Nothing to switch between: leave the overlay closed rather than
-        // showing a list of one.
         if (threadKeys.length < 2) return null;
         return {
           holdModifier,
