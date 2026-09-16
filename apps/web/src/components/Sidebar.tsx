@@ -4261,14 +4261,27 @@ export default function Sidebar() {
       ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
       : false,
   );
+  // Resolved through every thread shell, not only the rendered rows: a thread
+  // settled or snoozed while the switcher is held is still a real thread, so it
+  // keeps its title and releasing on it opens it.
+  const threadShellByKey = useMemo(
+    () =>
+      new Map(
+        threads.map(
+          (thread) =>
+            [scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)), thread] as const,
+        ),
+      ),
+    [threads],
+  );
   const openThreadByKey = useCallback(
     (threadKey: string) => {
-      const thread = threadByKey.get(threadKey);
+      const thread = threadShellByKey.get(threadKey);
       if (!thread) return false;
       navigateToThread(scopeThreadRef(thread.environmentId, thread.id));
       return true;
     },
-    [navigateToThread, threadByKey],
+    [navigateToThread, threadShellByKey],
   );
   const threadSwitcher = useThreadSwitcher({
     navigateToThreadKey: openThreadByKey,
@@ -4282,7 +4295,7 @@ export default function Sidebar() {
       switcherThreadKeys === null
         ? []
         : resolveThreadSwitcherEntries(switcherThreadKeys, (threadKey) => {
-            const thread = threadByKey.get(threadKey);
+            const thread = threadShellByKey.get(threadKey);
             if (!thread) return null;
             return {
               subtitle:
@@ -4290,7 +4303,7 @@ export default function Sidebar() {
               title: thread.title,
             };
           }),
-    [projectDisplayNameByKey, switcherThreadKeys, threadByKey],
+    [projectDisplayNameByKey, switcherThreadKeys, threadShellByKey],
   );
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {

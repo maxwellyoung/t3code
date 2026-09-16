@@ -104,7 +104,7 @@ export function advanceThreadSwitcherIndex(input: {
 
 export interface ThreadSwitcherEntry {
   readonly threadKey: string;
-  /** Null once the thread has left the sidebar while the switcher is open. */
+  /** Null once the thread no longer exists, for example deleted mid-switch. */
   readonly title: string | null;
   readonly subtitle: string | null;
 }
@@ -112,7 +112,7 @@ export interface ThreadSwitcherEntry {
 /**
  * One entry per key in the switch's snapshot, in the same order, so the row
  * the overlay highlights is always the thread that releasing opens. A thread
- * that leaves the sidebar mid-switch keeps its row, marked removed, rather than
+ * that stops existing mid-switch keeps its row, marked removed, rather than
  * dropping out and shifting every row below it off its index.
  */
 export function resolveThreadSwitcherEntries(

@@ -113,10 +113,10 @@ describe("thread switcher index", () => {
 });
 
 describe("thread switcher entries", () => {
-  it("keeps a removed thread's row so the highlight and the opened thread stay aligned", () => {
-    const threadKeys = ["active", "archived-mid-switch", "highlighted"];
+  it("keeps a deleted thread's row so the highlight and the opened thread stay aligned", () => {
+    const threadKeys = ["active", "deleted-mid-switch", "highlighted"];
     const entries = resolveThreadSwitcherEntries(threadKeys, (threadKey) =>
-      threadKey === "archived-mid-switch" ? null : { title: threadKey, subtitle: null },
+      threadKey === "deleted-mid-switch" ? null : { title: threadKey, subtitle: null },
     );
 
     expect(entries.map((entry) => entry.threadKey)).toEqual(threadKeys);
