@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -12,6 +13,8 @@ interface ThreadSwitcherSession {
   readonly holdModifier: ThreadSwitcherHoldModifier;
   /** The thread the switch began on; any other navigation cancels the switch. */
   readonly originThreadKey: string | null;
+  /** The router pathname when the switch began, for checks that cannot wait for a render. */
+  readonly originPathname: string;
   readonly threadKeys: readonly string[];
   readonly index: number;
 }
@@ -46,12 +49,13 @@ export function useThreadSwitcher({
   routeThreadKey: string | null;
   navigateToThreadKey: (threadKey: string) => void;
 }): ThreadSwitcher {
+  const router = useRouter();
   const [session, setSession] = useState<ThreadSwitcherSession | null>(null);
   const historyRef = useRef<readonly string[]>([]);
 
-  // Another shortcut, a click or a remote event moved the route mid-switch.
-  // Adjusted during render so a release right after cannot navigate a second
-  // time to a highlight chosen for a thread the user has already left.
+  // Another shortcut, a click or a remote event moved the route mid-switch:
+  // close the overlay on the next render. The release handler also checks the
+  // router directly, because the URL changes before React renders the new route.
   if (session !== null && session.originThreadKey !== routeThreadKey) {
     setSession(null);
   }
@@ -83,12 +87,13 @@ export function useThreadSwitcher({
         return {
           holdModifier,
           originThreadKey: routeThreadKey,
+          originPathname: router.history.location.pathname,
           index: advanceThreadSwitcherIndex({ count: threadKeys.length, direction, index: 0 }),
           threadKeys,
         };
       });
     },
-    [orderedThreadKeys, routeThreadKey],
+    [orderedThreadKeys, routeThreadKey, router],
   );
 
   useEffect(() => {
@@ -97,6 +102,9 @@ export function useThreadSwitcher({
     const onKeyUp = (event: KeyboardEvent) => {
       if (!isThreadSwitcherHoldModifierKey(event.key, session.holdModifier)) return;
       setSession(null);
+      // The router's history rather than window.location: desktop routes live
+      // in the hash.
+      if (router.history.location.pathname !== session.originPathname) return;
       const threadKey = session.threadKeys[session.index];
       if (threadKey !== undefined) navigateToThreadKey(threadKey);
     };
@@ -118,7 +126,7 @@ export function useThreadSwitcher({
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("blur", onBlur);
     };
-  }, [navigateToThreadKey, session]);
+  }, [navigateToThreadKey, router, session]);
 
   return { advance, index: session?.index ?? 0, threadKeys: session?.threadKeys ?? null };
 }
