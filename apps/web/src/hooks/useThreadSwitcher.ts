@@ -10,6 +10,8 @@ import {
 
 interface ThreadSwitcherSession {
   readonly holdModifier: ThreadSwitcherHoldModifier;
+  /** The thread the switch began on; any other navigation cancels the switch. */
+  readonly originThreadKey: string | null;
   readonly threadKeys: readonly string[];
   readonly index: number;
 }
@@ -47,6 +49,13 @@ export function useThreadSwitcher({
   const [session, setSession] = useState<ThreadSwitcherSession | null>(null);
   const historyRef = useRef<readonly string[]>([]);
 
+  // Another shortcut, a click or a remote event moved the route mid-switch.
+  // Adjusted during render so a release right after cannot navigate a second
+  // time to a highlight chosen for a thread the user has already left.
+  if (session !== null && session.originThreadKey !== routeThreadKey) {
+    setSession(null);
+  }
+
   useEffect(() => {
     if (routeThreadKey === null) return;
     historyRef.current = recordThreadSwitcherVisit(historyRef.current, routeThreadKey);
@@ -73,6 +82,7 @@ export function useThreadSwitcher({
         if (threadKeys.length < 2) return null;
         return {
           holdModifier,
+          originThreadKey: routeThreadKey,
           index: advanceThreadSwitcherIndex({ count: threadKeys.length, direction, index: 0 }),
           threadKeys,
         };
