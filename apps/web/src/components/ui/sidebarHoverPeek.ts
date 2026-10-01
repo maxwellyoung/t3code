@@ -10,6 +10,14 @@ export const SIDEBAR_HOVER_PEEK_OPEN_DELAY_MS = 110;
 /** Grace after leaving the panel, so clipping its corner does not dismiss it. */
 export const SIDEBAR_HOVER_PEEK_CLOSE_DELAY_MS = 180;
 
+/**
+ * The peek slides on its own short timing (200ms in, 150ms out) rather than the
+ * panel animation setting, which defaults to off: snapping a whole panel over
+ * the content reads as a glitch. Exit is quicker because by then the user has
+ * moved on. Keep in step with the `duration-*` classes in `sidebar.tsx`.
+ */
+export const SIDEBAR_HOVER_PEEK_EXIT_MS = 150;
+
 /** Slack to the right of the panel that still counts as "on" it. */
 export const SIDEBAR_HOVER_PEEK_REGION_SLACK_PX = 12;
 

@@ -26,6 +26,7 @@ import {
   isHoverPeekPointerType,
   shouldClosePeekForPointer,
   SIDEBAR_HOVER_PEEK_CLOSE_DELAY_MS,
+  SIDEBAR_HOVER_PEEK_EXIT_MS,
   SIDEBAR_HOVER_PEEK_HOLD_OPEN_SELECTOR,
   SIDEBAR_HOVER_PEEK_OPEN_DELAY_MS,
 } from "./sidebarHoverPeek";
@@ -198,27 +199,47 @@ function SidebarProvider({
  * is showing. Menus elsewhere in the app never hold it. Dismissing a menu with
  * the keyboard, or leaving the window, produces no pointer move, so those
  * re-run the same check against the last known position.
+ *
+ * `phase` stays "closing" while the panel slides back out, so it keeps sitting
+ * above the content until it is gone. Opening the sidebar for real mid-peek is
+ * a "handoff": the panel is already where it belongs, so for one frame nothing
+ * animates.
  */
 function useSidebarHoverPeek(enabled: boolean) {
   const [peeking, setPeeking] = React.useState(false);
+  const [exit, setExit] = React.useState<"closing" | "handoff" | null>(null);
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const openTimeoutRef = React.useRef(0);
   const closeTimeoutRef = React.useRef(0);
 
   // Adjusted during render so opening the sidebar for real drops the peek before
   // the next paint; collapsing again then needs a fresh dwell on the edge.
-  if (peeking && !enabled) {
+  if (!enabled && peeking) {
     setPeeking(false);
+    setExit("handoff");
+  } else if (!enabled && exit === "closing") {
+    setExit(null);
   }
+
+  React.useEffect(() => {
+    if (exit === "closing") {
+      const timeout = window.setTimeout(() => setExit(null), SIDEBAR_HOVER_PEEK_EXIT_MS);
+      return () => window.clearTimeout(timeout);
+    }
+    if (exit === "handoff") {
+      const frame = window.requestAnimationFrame(() => setExit(null));
+      return () => window.cancelAnimationFrame(frame);
+    }
+  }, [exit]);
 
   const onEdgePointerEnter = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (!enabled || !isHoverPeekPointerType(event.pointerType)) return;
       window.clearTimeout(openTimeoutRef.current);
-      openTimeoutRef.current = window.setTimeout(
-        () => setPeeking(true),
-        SIDEBAR_HOVER_PEEK_OPEN_DELAY_MS,
-      );
+      openTimeoutRef.current = window.setTimeout(() => {
+        setPeeking(true);
+        setExit(null);
+      }, SIDEBAR_HOVER_PEEK_OPEN_DELAY_MS);
     },
     [enabled],
   );
@@ -256,6 +277,7 @@ function useSidebarHoverPeek(enabled: boolean) {
       closeTimeoutRef.current = window.setTimeout(() => {
         closeTimeoutRef.current = 0;
         setPeeking(false);
+        setExit("closing");
       }, SIDEBAR_HOVER_PEEK_CLOSE_DELAY_MS);
     };
 
@@ -297,7 +319,8 @@ function useSidebarHoverPeek(enabled: boolean) {
     [],
   );
 
-  return { onEdgePointerEnter, onEdgePointerLeave, panelRef, peeking };
+  const phase = peeking ? "open" : (exit ?? undefined);
+  return { onEdgePointerEnter, onEdgePointerLeave, panelRef, phase };
 }
 
 function Sidebar({
@@ -338,7 +361,7 @@ function Sidebar({
   );
   // Left side only: the peek region is measured from the window's left edge.
   const hoverPeekAvailable = hoverPeek && side === "left" && collapsible === "offcanvas";
-  const { onEdgePointerEnter, onEdgePointerLeave, panelRef, peeking } = useSidebarHoverPeek(
+  const { onEdgePointerEnter, onEdgePointerLeave, panelRef, phase } = useSidebarHoverPeek(
     hoverPeekAvailable && !isMobile && state === "collapsed",
   );
 
@@ -402,7 +425,7 @@ function Sidebar({
       <div
         className="group peer hidden text-sidebar-foreground md:block"
         data-collapsible={state === "collapsed" ? collapsible : ""}
-        data-peek={peeking ? "true" : ""}
+        data-peek={phase}
         data-side={side}
         data-slot="sidebar"
         data-state={state}
@@ -442,8 +465,7 @@ function Sidebar({
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
               : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
             // The gap above stays at zero width, so peeking never reflows content.
-            "group-data-[peek=true]:left-0! group-data-[peek=true]:z-45",
-            "group-data-[peek=true]:shadow-[0_0_32px_-8px_rgb(0_0_0/45%)] dark:group-data-[peek=true]:shadow-[0_0_36px_-8px_rgb(0_0_0/70%)]",
+            "group-data-peek:z-45 group-data-[peek=handoff]:transition-none!",
             className,
           )}
           data-slot="sidebar-container"
@@ -451,7 +473,20 @@ function Sidebar({
           {...props}
         >
           <div
-            className="flex h-full w-full flex-col bg-sidebar surface-grain group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-sm/5"
+            className={cn(
+              "flex h-full w-full flex-col bg-sidebar surface-grain group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-sm/5",
+              // The peek slides the inner panel rather than the container's
+              // `left`, so it stays on the compositor and never contends with
+              // the panel animation setting. Only while collapsed: opening the
+              // sidebar for real from a peek must not replay the slide.
+              hoverPeekAvailable && [
+                "group-data-[state=collapsed]:transition-[translate,box-shadow] group-data-[state=collapsed]:ease-[cubic-bezier(0.32,0.72,0,1)]",
+                "group-data-[peek=open]:translate-x-(--sidebar-width) group-data-[peek=open]:duration-200 group-data-[peek=closing]:duration-150",
+                "group-data-[peek=open]:shadow-[0_0_32px_-8px_rgb(0_0_0/45%)] dark:group-data-[peek=open]:shadow-[0_0_36px_-8px_rgb(0_0_0/70%)]",
+                // Reduced motion: appear in place with a fade instead of sliding.
+                "motion-reduce:group-data-[state=collapsed]:transition-opacity motion-reduce:group-data-[state=collapsed]:group-[:not([data-peek=open])]:opacity-0",
+              ],
+            )}
             data-sidebar="sidebar"
             data-slot="sidebar-inner"
           >
