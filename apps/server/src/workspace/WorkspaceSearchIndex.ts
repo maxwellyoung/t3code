@@ -233,6 +233,11 @@ function codePointBefore(line: string, index: number): string | undefined {
   return codePointAt(line, previousIndex);
 }
 
+/**
+ * Plain-mode match ranges miss Unicode case variants. Use Unicode regex
+ * folding for case-insensitive queries, encoding literal punctuation so the
+ * native query parser cannot reinterpret it as a path or glob constraint.
+ */
 function buildContentSearchQuery(input: Omit<ProjectSearchContentsInput, "cwd">): {
   readonly searchQuery: string;
   readonly regexMode: boolean;
@@ -240,9 +245,6 @@ function buildContentSearchQuery(input: Omit<ProjectSearchContentsInput, "cwd">)
   if (input.caseSensitive) {
     return { searchQuery: input.query, regexMode: input.useRegex };
   }
-  // Plain-mode match ranges miss Unicode case variants. Enable Unicode regex
-  // folding, encoding literal punctuation so the native query parser cannot
-  // reinterpret it as a path/glob constraint before regex matching.
   const query = input.useRegex
     ? input.query
     : input.query.replace(
